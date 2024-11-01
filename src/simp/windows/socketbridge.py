@@ -106,7 +106,7 @@ class SocketBridge(Bridge[socket, WinSocket]):
         with socket() as listener:
             listener.bind((self.localhost, 0))
             listener.listen(1)
-            _, port = listener.getsockname()[:2]
+            port = listener.getsockname()[1]
             winsocket = Ws2.WSASocket(AF_INET, SOCK_STREAM, 0, None, 0, 0)
             winsocket = WinSocket(winsocket)
 
