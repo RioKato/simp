@@ -100,12 +100,11 @@ class WinSocket(AbstractContextManager):
 
 @dataclass
 class SocketBridge(Bridge[socket, WinSocket]):
-    laddr: str
-    caddr: str
+    localhost: str = '127.0.0.1'
 
     def __call__(self) -> tuple[socket, WinSocket]:
         with socket() as listener:
-            listener.bind((self.laddr, 0))
+            listener.bind((self.localhost, 0))
             listener.listen(1)
             _, port = listener.getsockname()[:2]
             winsocket = Ws2.WSASocket(AF_INET, SOCK_STREAM, 0, None, 0, 0)
@@ -116,7 +115,7 @@ class SocketBridge(Bridge[socket, WinSocket]):
 
             sockaddr = sockaddr_in()
             sockaddr.sin_family = AF_INET
-            sockaddr.sin_addr = inet_aton(self.caddr)
+            sockaddr.sin_addr = inet_aton(self.localhost)
             sockaddr.sin_port = htons(port)
             err = Ws2.connect(winsocket.fileno(), pointer(sockaddr), sizeof(sockaddr_in))
 
