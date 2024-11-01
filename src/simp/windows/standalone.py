@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
-from subprocess import STARTF_USESTDHANDLES, STARTUPINFO, Popen
+from subprocess import STARTF_USESTDHANDLES, STARTUPINFO, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE, Popen
 from sys import stderr, stdin, stdout
 from typing import Iterator
 from .socketbridge import WinSocket
@@ -12,13 +12,13 @@ class Standalone(Executor[WinSocket]):
     @contextmanager
     def local(self, command: list[str], *, redirect: WinSocket | None = None, interactive: bool = False, tracable: bool = False, wait: bool = False) -> Iterator[int]:
         if interactive:
-            hStdInput = redirect.fileno() if redirect else stdin.fileno()
-            hStdOutput = redirect.fileno() if redirect else stdout.fileno()
-            hStdError = redirect.fileno() if redirect else stderr.fileno()
+            hStdInput = redirect.fileno() if redirect else STD_INPUT_HANDLE
+            hStdOutput = redirect.fileno() if redirect else STD_OUTPUT_HANDLE
+            hStdError = redirect.fileno() if redirect else STD_ERROR_HANDLE
         else:
             hStdInput = redirect.fileno() if redirect else None
-            hStdOutput = redirect.fileno() if redirect else stdout.fileno()
-            hStdError = redirect.fileno() if redirect else stderr.fileno()
+            hStdOutput = redirect.fileno() if redirect else STD_OUTPUT_HANDLE
+            hStdError = redirect.fileno() if redirect else STD_ERROR_HANDLE
 
         startupinfo = STARTUPINFO(
             dwFlags=STARTF_USESTDHANDLES,
