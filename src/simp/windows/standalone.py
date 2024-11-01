@@ -8,23 +8,19 @@ from .socketbridge import WinSocket
 from ..simp import Executor
 
 
+@contextmanager
+def closefd(fd: int) -> Iterator[None]:
+    try:
+        yield
+    finally:
+        os.close(fd)
+
+
 @dataclass
 class Standalone(Executor[WinSocket]):
     @contextmanager
     def local(self, command: list[str], *, redirect: WinSocket | None = None, interactive: bool = False, tracable: bool = False, wait: bool = False) -> Iterator[int]:
-        devnull = -1
-
-        @contextmanager
-        def close_devnull() -> Iterator[None]:
-            try:
-                yield
-            finally:
-                if devnull >= 0:
-                    os.close(devnull)
-
         with ExitStack() as estack:
-            estack.enter_context(close_devnull())
-
             if interactive:
                 hStdInput = redirect.fileno() if redirect else STD_INPUT_HANDLE
                 hStdOutput = redirect.fileno() if redirect else STD_OUTPUT_HANDLE
@@ -33,8 +29,9 @@ class Standalone(Executor[WinSocket]):
                 if redirect:
                     hStdInput = redirect.fileno()
                 else:
-                    devnull = os.open(os.devnull, os.O_RDWR)
-                    hStdInput = get_osfhandle(devnull)
+                    fd = os.open(os.devnull, os.O_RDWR)
+                    estack.enter_context(closefd(fd))
+                    hStdInput = get_osfhandle(fd)
 
                 hStdOutput = redirect.fileno() if redirect else STD_OUTPUT_HANDLE
                 hStdError = redirect.fileno() if redirect else STD_ERROR_HANDLE
