@@ -14,6 +14,6 @@ match platform:
         from .linux import SocketBridge, Standalone
         __all__.extend(['SocketBridge', 'Standalone'])
 
-    case 'windows':
+    case 'win32':
         from .windows import SocketBridge, Standalone, WSAStartup, WinSocket
         __all__.extend(['SocketBridge', 'Standalone', 'WSAStartup', 'WinSocket'])

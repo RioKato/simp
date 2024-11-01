@@ -165,4 +165,6 @@ class SocketBridge(Bridge[socket, WinSocket]):
                 client.close()
                 raise
 
+            accepted = WinSocket(accepted)
+
         return (client, accepted)
