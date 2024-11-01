@@ -70,7 +70,7 @@ def WSAStartup() -> Iterator[None]:
     err = Ws2.WSAStartup(0x0202, Ws2.LPWSADATA(wsadata))
 
     if err != 0:
-        raise WinError(Ws2.WSAGetLastError())
+        raise WinError(err)
 
     try:
         yield
