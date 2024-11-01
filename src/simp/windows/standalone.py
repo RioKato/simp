@@ -27,7 +27,7 @@ class Standalone(Executor[WinSocket]):
             hStdError=hStdError
         )
 
-        with Popen(command, startupinfo=startupinfo) as popen:
+        with Popen(command, close_fds=False, startupinfo=startupinfo) as popen:
             try:
                 yield popen.pid
             finally:
