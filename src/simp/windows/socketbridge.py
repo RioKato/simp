@@ -1,8 +1,8 @@
-from contextlib import AbstractContextManager, contextmanager, suppress
+from contextlib import AbstractContextManager, contextmanager
 from ctypes import POINTER, Structure, WinDLL, c_char, c_char_p, c_int, c_short, c_uint, c_ushort, c_void_p, pointer, sizeof
 from ctypes.wintypes import DWORD, WORD
 from dataclasses import dataclass
-from socket import AF_INET, SOCK_STREAM, inet_aton, ntohs, socket
+from socket import AF_INET, SOCK_STREAM, htons, inet_aton, socket
 from typing import Iterator
 from ..simp import Bridge
 
@@ -120,51 +120,27 @@ class SocketBridge(Bridge[socket, WinSocket]):
     caddr: str = '127.0.0.1'
 
     def __call__(self) -> tuple[socket, WinSocket]:
-        listener = Ws2.WSASocket(AF_INET, SOCK_STREAM, 0, None, 0, 0)
+        with socket() as listener:
+            listener.bind((self.laddr, 0))
+            listener.listen(1)
+            _, port = listener.getsockname()[:2]
+            winsocket = Ws2.WSASocket(AF_INET, SOCK_STREAM, 0, None, 0, 0)
+            winsocket = WinSocket(winsocket)
 
-        if listener == Ws2.INVALID_SOCKET:
-            raise OSError
+            if winsocket.fileno() == Ws2.INVALID_SOCKET:
+                raise OSError
 
-        with WinSocket(listener) as listener:
             sockaddr = sockaddr_in()
             sockaddr.sin_family = AF_INET
-            sockaddr.sin_addr = inet_aton(self.laddr)
-            sockaddr.sin_port = 0
-            err = Ws2.bind(listener.fileno(), pointer(sockaddr), sizeof(sockaddr_in))
-
-            if err != 0:
-                raise OSError
-
-            sockaddr = sockaddr_in()
-            namelen = c_int(sizeof(sockaddr_in))
-            err = Ws2.getsockname(listener.fileno(), pointer(sockaddr), pointer(namelen))
-
-            if err != 0:
-                raise OSError
-
-            err = Ws2.listen(listener.fileno(), 1)
-
-            if err != 0:
-                raise OSError
-
-            port = ntohs(sockaddr.sin_port)
-            client = socket()
-            client.setblocking(False)
+            sockaddr.sin_addr = inet_aton(self.caddr)
+            sockaddr.sin_port = htons(port)
+            err = Ws2.connect(winsocket.fileno(), pointer(sockaddr), sizeof(sockaddr_in))
+            assert (err != 0)
 
             try:
-                with suppress(BlockingIOError, InterruptedError):
-                    client.connect((self.caddr, port))
+                accepted, _ = listener.accept()
             except:
-                client.close()
+                winsocket.close()
                 raise
 
-            client.setblocking(True)
-            accepted = Ws2.accept(listener.fileno(), None, None)
-
-            if accepted == Ws2.INVALID_SOCKET:
-                client.close()
-                raise
-
-            accepted = WinSocket(accepted)
-
-        return (client, accepted)
+        return (accepted, winsocket)
