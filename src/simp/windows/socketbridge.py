@@ -1,0 +1,168 @@
+from contextlib import AbstractContextManager, contextmanager, suppress
+from ctypes import POINTER, Structure, WinDLL, c_char, c_char_p, c_int, c_short, c_uint, c_ushort, c_void_p, pointer, sizeof
+from ctypes.wintypes import DWORD, WORD
+from dataclasses import dataclass
+from socket import AF_INET, SOCK_STREAM, inet_aton, ntohs, socket
+from typing import Iterator
+from ..simp import Bridge
+
+
+WSADESCRIPTION_LEN = 256
+WSASYS_STATUS_LEN = 128
+
+
+class WSADATA(Structure):
+    _fields_ = [
+        ('wVersion', WORD),
+        ('wHighVersion', WORD),
+        ('szDescription', c_char * (WSADESCRIPTION_LEN + 1)),
+        ('szSystemStatus', c_char * (WSASYS_STATUS_LEN + 1)),
+        ('iMaxSockets', c_ushort),
+        ('iMaxUdpDg', c_ushort),
+        ('lpVendorInfo', c_char_p),
+    ]
+
+
+class sockaddr_in(Structure):
+    _fields_ = [
+        ('sin_family', c_short),
+        ('sin_port', c_ushort),
+        ('sin_addr', c_char * 4),
+        ('sin_zero', c_char * 8)
+    ]
+
+
+class Ws2:
+    ws2_32 = WinDLL('ws2_32')
+
+    LPWSADATA = POINTER(WSADATA)
+    WSAStartup = ws2_32.WSAStartup
+    WSAStartup.argtypes = [WORD, LPWSADATA]
+    WSAStartup.restype = c_int
+
+    WSACleanup = ws2_32.WSACleanup
+    WSACleanup.argtypes = []
+    WSACleanup.restype = c_int
+
+    INVALID_SOCKET: int = 0xffffffff
+    SOCKET = c_uint
+    GROUP = c_uint
+    WSASocket = ws2_32.WSASocketA
+    WSASocket.argtypes = [c_int, c_int, c_int, c_void_p, GROUP, DWORD]
+    WSASocket.restype = SOCKET
+
+    closesocket = ws2_32.closesocket
+    closesocket.argtypes = [SOCKET]
+    closesocket.restype = c_int
+
+    WSAGetLastError = ws2_32.WSAGetLastError
+    WSAGetLastError.argtypes = []
+    WSAGetLastError.restype = c_int
+
+    connect = ws2_32.connect
+    connect.argtypes = [SOCKET, POINTER(sockaddr_in), c_int]
+    connect.restype = c_int
+
+    bind = ws2_32.bind
+    bind.argtypes = [SOCKET, POINTER(sockaddr_in), c_int]
+    bind.restype = c_int
+
+    listen = ws2_32.listen
+    listen.argtypes = [SOCKET, c_int]
+    listen.restype = c_int
+
+    accept = ws2_32.accept
+    accept.argtypes = [SOCKET, POINTER(sockaddr_in), POINTER(c_int)]
+    accept.restype = SOCKET
+
+    getsockname = ws2_32.getsockname
+    getsockname.argtypes = [SOCKET, POINTER(sockaddr_in), POINTER(c_int)]
+    getsockname.restype = c_int
+
+
+@contextmanager
+def WSAStartup() -> Iterator[None]:
+    wsadata = WSADATA()
+    err = Ws2.WSAStartup(0x0202, Ws2.LPWSADATA(wsadata))
+
+    if err != 0:
+        raise OSError
+
+    try:
+        yield
+    finally:
+        err = Ws2.WSACleanup()
+
+        if err != 0:
+            raise OSError
+
+
+class WinSocket(AbstractContextManager):
+    def __init__(self, handle: int):
+        self.__handle: int = handle
+
+    def close(self):
+        if self.__handle >= 0:
+            Ws2.closesocket(self.__handle)
+
+        self.__handle = -1
+
+    def fileno(self) -> int:
+        return self.__handle
+
+    def __exit__(self, *_):
+        self.close()
+
+
+@dataclass
+class SocketBridge(Bridge[socket, WinSocket]):
+    laddr: str = '0.0.0.0'
+    caddr: str = '127.0.0.1'
+
+    def __call__(self) -> tuple[socket, WinSocket]:
+        listener = Ws2.WSASocket(AF_INET, SOCK_STREAM, 0, None, 0, 0)
+
+        if listener == Ws2.INVALID_SOCKET:
+            raise OSError
+
+        with WinSocket(listener) as listener:
+            sockaddr = sockaddr_in()
+            sockaddr.sin_family = AF_INET
+            sockaddr.sin_addr = inet_aton(self.laddr)
+            sockaddr.sin_port = 0
+            err = Ws2.bind(listener.fileno(), pointer(sockaddr), sizeof(sockaddr_in))
+
+            if err != 0:
+                raise OSError
+
+            sockaddr = sockaddr_in()
+            namelen = c_int(sizeof(sockaddr_in))
+            err = Ws2.getsockname(listener.fileno(), pointer(sockaddr), pointer(namelen))
+
+            if err != 0:
+                raise OSError
+
+            err = Ws2.listen(listener.fileno(), 1)
+
+            if err != 0:
+                raise OSError
+
+            port = ntohs(sockaddr.sin_port)
+            client = socket()
+            client.setblocking(False)
+
+            try:
+                with suppress(BlockingIOError, InterruptedError):
+                    client.connect((self.caddr, port))
+            except:
+                client.close()
+                raise
+
+            client.setblocking(True)
+            accepted = Ws2.accept(listener.fileno(), None, None)
+
+            if accepted == Ws2.INVALID_SOCKET:
+                client.close()
+                raise
+
+        return (client, accepted)
