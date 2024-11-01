@@ -1,5 +1,5 @@
 from contextlib import AbstractContextManager, contextmanager
-from ctypes import POINTER, Structure, WinDLL, c_char, c_char_p, c_int, c_short, c_uint, c_ushort, c_void_p, pointer, sizeof
+from ctypes import POINTER, Structure, WinDLL, WinError, c_char, c_char_p, c_int, c_short, c_uint, c_ushort, c_void_p, pointer, sizeof
 from ctypes.wintypes import DWORD, WORD
 from dataclasses import dataclass
 from socket import AF_INET, SOCK_STREAM, htons, inet_aton, socket
@@ -63,22 +63,6 @@ class Ws2:
     connect.argtypes = [SOCKET, POINTER(sockaddr_in), c_int]
     connect.restype = c_int
 
-    bind = ws2_32.bind
-    bind.argtypes = [SOCKET, POINTER(sockaddr_in), c_int]
-    bind.restype = c_int
-
-    listen = ws2_32.listen
-    listen.argtypes = [SOCKET, c_int]
-    listen.restype = c_int
-
-    accept = ws2_32.accept
-    accept.argtypes = [SOCKET, POINTER(sockaddr_in), POINTER(c_int)]
-    accept.restype = SOCKET
-
-    getsockname = ws2_32.getsockname
-    getsockname.argtypes = [SOCKET, POINTER(sockaddr_in), POINTER(c_int)]
-    getsockname.restype = c_int
-
 
 @contextmanager
 def WSAStartup() -> Iterator[None]:
@@ -86,7 +70,7 @@ def WSAStartup() -> Iterator[None]:
     err = Ws2.WSAStartup(0x0202, Ws2.LPWSADATA(wsadata))
 
     if err != 0:
-        raise OSError
+        raise WinError(Ws2.WSAGetLastError())
 
     try:
         yield
@@ -94,7 +78,7 @@ def WSAStartup() -> Iterator[None]:
         err = Ws2.WSACleanup()
 
         if err != 0:
-            raise OSError
+            raise WinError(Ws2.WSAGetLastError())
 
 
 class WinSocket(AbstractContextManager):
@@ -116,8 +100,8 @@ class WinSocket(AbstractContextManager):
 
 @dataclass
 class SocketBridge(Bridge[socket, WinSocket]):
-    laddr: str = '0.0.0.0'
-    caddr: str = '127.0.0.1'
+    laddr: str
+    caddr: str
 
     def __call__(self) -> tuple[socket, WinSocket]:
         with socket() as listener:
@@ -128,7 +112,7 @@ class SocketBridge(Bridge[socket, WinSocket]):
             winsocket = WinSocket(winsocket)
 
             if winsocket.fileno() == Ws2.INVALID_SOCKET:
-                raise OSError
+                raise WinError(Ws2.WSAGetLastError())
 
             sockaddr = sockaddr_in()
             sockaddr.sin_family = AF_INET
@@ -138,7 +122,7 @@ class SocketBridge(Bridge[socket, WinSocket]):
 
             if err != 0:
                 winsocket.close()
-                raise OSError
+                raise WinError(Ws2.WSAGetLastError())
 
             try:
                 accepted, _ = listener.accept()
