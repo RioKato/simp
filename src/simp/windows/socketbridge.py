@@ -135,7 +135,10 @@ class SocketBridge(Bridge[socket, WinSocket]):
             sockaddr.sin_addr = inet_aton(self.caddr)
             sockaddr.sin_port = htons(port)
             err = Ws2.connect(winsocket.fileno(), pointer(sockaddr), sizeof(sockaddr_in))
-            assert (err != 0)
+
+            if err != 0:
+                winsocket.close()
+                raise OSError
 
             try:
                 accepted, _ = listener.accept()
