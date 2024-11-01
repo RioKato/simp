@@ -41,8 +41,8 @@ def config[Helper, Connection: AbstractContextManager, Redirect: AbstractContext
 
     with connection if connection else nullcontext():
         with ExitStack() as estack:
-            context = redirect if redirect else nullcontext()
-            estack.enter_context(context)
+            if redirect:
+                estack.enter_context(redirect)
 
             with launcher(executor, redirect=redirect) as helper:
                 estack.pop_all().close()
