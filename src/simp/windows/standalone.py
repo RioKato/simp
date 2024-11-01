@@ -1,7 +1,7 @@
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from msvcrt import get_osfhandle
-import os
+from os import O_RDWR, devnull, open as osopen
 from subprocess import STARTF_USESTDHANDLES, STARTUPINFO, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE, Popen
 from typing import Iterator
 from .socketbridge import WinSocket
@@ -29,7 +29,7 @@ class Standalone(Executor[WinSocket]):
                 if redirect:
                     hStdInput = redirect.fileno()
                 else:
-                    fd = os.open(os.devnull, os.O_RDWR)
+                    fd = osopen(devnull, O_RDWR)
                     estack.enter_context(closefd(fd))
                     hStdInput = get_osfhandle(fd)
 
