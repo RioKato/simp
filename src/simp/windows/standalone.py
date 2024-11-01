@@ -1,7 +1,7 @@
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from msvcrt import get_osfhandle
-from os import O_RDWR, devnull, open as osopen
+from os import O_RDWR, close, devnull, open as osopen
 from subprocess import STARTF_USESTDHANDLES, STARTUPINFO, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE, Popen
 from typing import Iterator
 from .socketbridge import WinSocket
@@ -13,7 +13,7 @@ def closefd(fd: int) -> Iterator[None]:
     try:
         yield
     finally:
-        os.close(fd)
+        close(fd)
 
 
 @dataclass
