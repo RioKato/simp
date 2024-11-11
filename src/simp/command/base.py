@@ -29,7 +29,7 @@ class Bridge[Connection, Redirect](metaclass=ABCMeta):
 
 
 @contextmanager
-def execcmd[Helper, Connection: AbstractContextManager, Redirect: AbstractContextManager](
+def run[Helper, Connection: AbstractContextManager, Redirect: AbstractContextManager](
         launcher: Launcher[Helper],
         executor: Executor[Redirect],
         bridge: Bridge[Connection, Redirect] | None) -> Iterator[tuple[Connection | None, Helper]]:

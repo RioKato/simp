@@ -1,20 +1,22 @@
-from abc import ABCMeta, abstractmethod
 from contextlib import suppress
+from socket import socket
+from sys import platform
 from typing import Callable
 
 
-class BufferedSocket(metaclass=ABCMeta):
-    def __init__(self):
+class BufferedSocket:
+    def __init__(self, sk: socket):
+        self.__sk: socket = sk
         self.__buffer: bytes = b''
         self.__eof: bool = False
 
-    @abstractmethod
     def _send(self, data: bytes) -> int:
-        ...
+        return self.__sk.send(data)
 
-    @abstractmethod
     def _recv(self, *, timeout: float = -1) -> bytes:
-        ...
+        timeout_ = timeout if timeout >= 0 else None
+        self.__sk.settimeout(timeout_)
+        return self.__sk.recv(0x1000)
 
     def send(self, data: bytes):
         while data:
@@ -99,3 +101,12 @@ class BufferedSocket(metaclass=ABCMeta):
     def sendlineafter(self, delim: bytes, data: bytes, *, timeout: float = -1):
         self.recvuntil(delim, timeout=timeout)
         self.sendline(data)
+
+    def interactive(self):
+        if platform == 'linux':
+            import readline
+
+        with suppress(KeyboardInterrupt):
+            while True:
+                data = input().encode()
+                self.sendline(data)

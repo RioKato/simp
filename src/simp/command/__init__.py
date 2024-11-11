@@ -5,14 +5,14 @@ from .tmux import Tmux
 
 match platform:
     case 'linux':
-        from .linux import Standalone, execcmd
+        from .linux import Standalone, run
 
     case 'win32':
-        from .windows import Standalone, execcmd
+        from .windows import Standalone, run
 
 __all__ = [
     'Cmd',
     'Docker',
     'Tmux',
-    'Standalone', 'execcmd'
+    'Standalone', 'run'
 ]

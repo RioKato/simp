@@ -1,6 +1,6 @@
-from .execcmd import execcmd
+from .run import run
 from .standalone import Standalone
 
 __all__ = [
-    'execcmd', 'Standalone'
+    'run', 'Standalone'
 ]
