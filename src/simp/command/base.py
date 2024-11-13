@@ -32,7 +32,7 @@ class Bridge[Connection, Redirect](metaclass=ABCMeta):
 def run[Helper, Connection: AbstractContextManager, Redirect: AbstractContextManager](
         launcher: Launcher[Helper],
         executor: Executor[Redirect],
-        bridge: Bridge[Connection, Redirect] | None) -> Iterator[tuple[Connection | None, Helper]]:
+        bridge: Bridge[Connection, Redirect] | None) -> Iterator[tuple[Helper, Connection | None]]:
 
     if bridge:
         connection, redirect = bridge()
@@ -46,4 +46,4 @@ def run[Helper, Connection: AbstractContextManager, Redirect: AbstractContextMan
 
             with launcher(executor, redirect=redirect) as helper:
                 estack.pop_all().close()
-                yield (connection, helper)
+                yield (helper, connection)
