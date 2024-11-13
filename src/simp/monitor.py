@@ -82,14 +82,14 @@ def hexdump(data: bytes, header: str) -> str:
 
 def transfer(dst: socket, src: socket, header: str, verbose: int) -> bool:
     eof = False
-    data = b''
+    buffer = b''
     dst.setblocking(True)
     src.setblocking(False)
 
     with suppress(BlockingIOError, SSLWantReadError, SSLWantWriteError):
         while True:
-            if temp := src.recv(0x1000):
-                data += temp
+            if data := src.recv(0x1000):
+                buffer += data
             else:
                 eof = True
                 break
@@ -97,16 +97,16 @@ def transfer(dst: socket, src: socket, header: str, verbose: int) -> bool:
     message = b''
 
     if verbose == 1:
-        message = data
+        message = buffer
 
     if verbose >= 2:
-        message = hexdump(data, header).encode()
+        message = hexdump(buffer, header).encode()
 
     write(stderr.fileno(), message)
 
-    while data:
-        n = dst.send(data)
-        data = data[n:]
+    while buffer:
+        n = dst.send(buffer)
+        buffer = buffer[n:]
 
     return eof
 

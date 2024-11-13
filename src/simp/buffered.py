@@ -28,12 +28,6 @@ class BufferedSocket:
         return self.send(data + b'\n')
 
     def recv(self, *, size: int = -1, timeout: float = -1) -> bytes:
-        if not self.__eof and size and not timeout and not self.__buffer:
-            if data := self._recv(timeout=0):
-                self.__buffer += data
-            else:
-                self.__eof = True
-
         if not self.__eof:
             with suppress(BlockingIOError, SSLWantReadError, SSLWantWriteError):
                 while data := self._recv(timeout=0):
@@ -41,7 +35,7 @@ class BufferedSocket:
 
                 self.__eof = True
 
-        if not self.__eof and size and timeout and not self.__buffer:
+        if not self.__eof and timeout and not self.__buffer:
             if data := self._recv(timeout=timeout):
                 self.__buffer += data
             else:
@@ -49,6 +43,11 @@ class BufferedSocket:
 
         size = size if size >= 0 else len(self.__buffer)
         data, self.__buffer = self.__buffer[:size], self.__buffer[size:]
+
+        if not self.__eof and size and not data:
+            assert (not timeout)
+            raise BlockingIOError
+
         return data
 
     def __cancel(self, data: bytes):
