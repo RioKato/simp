@@ -23,15 +23,21 @@ class Standalone(Executor[socket]):
         def pr_set_ptracer_any():
             Glibc.prctl(Glibc.PR_SET_PTRACER, Glibc.PR_SET_PTRACER_ANY, 0, 0, 0)
 
+        process_group = 0
+
         if interactive:
-            stdin = stdout = stderr = cast(IO, redirect) if redirect else None
+            if redirect:
+                stdin = cast(IO, redirect)
+            else:
+                stdin = None
+                process_group = None
         else:
             stdin = DEVNULL
-            stdout = stderr = cast(IO, redirect) if redirect else None
 
+        stdout = stderr = cast(IO, redirect) if redirect else None
         preexec_fn = pr_set_ptracer_any if tracable else None
 
-        with Popen(command, stdin=stdin, stdout=stdout, stderr=stderr, process_group=0, preexec_fn=preexec_fn) as popen:
+        with Popen(command, stdin=stdin, stdout=stdout, stderr=stderr, process_group=process_group, preexec_fn=preexec_fn) as popen:
             try:
                 yield popen.pid
             finally:

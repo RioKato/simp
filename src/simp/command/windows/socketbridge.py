@@ -1,5 +1,5 @@
 from contextlib import AbstractContextManager, contextmanager
-from ctypes import POINTER, Structure, WinDLL, WinError, c_byte, c_char, c_char_p, c_int, c_short, c_uint, c_ushort, c_void_p, pointer, sizeof
+from ctypes import POINTER, Structure, WinDLL, WinError, c_byte, c_char, c_char_p, c_int, c_long, c_short, c_uint, c_ulong, c_ushort, c_void_p, pointer, sizeof
 from ctypes.wintypes import DWORD, WORD
 from dataclasses import dataclass
 from socket import AF_INET, SOCK_STREAM, htons, inet_aton, socket
@@ -63,6 +63,11 @@ class Ws2:
     connect.argtypes = [SOCKET, POINTER(sockaddr_in), c_int]
     connect.restype = c_int
 
+    FIOBIO: int = 0x8004667e
+    ioctlsocket = ws2_32.ioctlsocket
+    ioctlsocket.argtypes = [SOCKET, c_long, POINTER(c_ulong)]
+    ioctlsocket.restype = c_int
+
 
 @contextmanager
 def WSAStartup() -> Iterator[None]:
@@ -113,20 +118,24 @@ class SocketBridge(Bridge[socket, WinSocket]):
             if winsocket.fileno() == Ws2.INVALID_SOCKET:
                 raise WinError(Ws2.WSAGetLastError())
 
+            if Ws2.ioctlsocket(winsocket.fileno(), Ws2.FIOBIO, pointer(c_ulong(1))):
+                raise WinError(Ws2.WSAGetLastError())
+
             sockaddr = sockaddr_in()
             sockaddr.sin_family = AF_INET
             sockaddr.sin_addr = tuple(inet_aton(host))
             sockaddr.sin_port = htons(port)
-            err = Ws2.connect(winsocket.fileno(), pointer(sockaddr), sizeof(sockaddr_in))
-
-            if err != 0:
-                winsocket.close()
-                raise WinError(Ws2.WSAGetLastError())
+            Ws2.connect(winsocket.fileno(), pointer(sockaddr), sizeof(sockaddr_in))
 
             try:
                 accepted, _ = listener.accept()
             except:
                 winsocket.close()
                 raise
+
+        if Ws2.ioctlsocket(winsocket.fileno(), Ws2.FIOBIO, pointer(c_ulong(0))):
+            winsocket.close()
+            accepted.close()
+            raise WinError(Ws2.WSAGetLastError())
 
         return (accepted, winsocket)

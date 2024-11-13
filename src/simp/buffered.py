@@ -1,5 +1,6 @@
 from contextlib import suppress
 from socket import socket
+from ssl import SSLWantReadError, SSLWantWriteError
 from sys import platform
 from typing import Callable
 
@@ -34,7 +35,7 @@ class BufferedSocket:
                 self.__eof = True
 
         if not self.__eof:
-            with suppress(BlockingIOError):
+            with suppress(BlockingIOError, SSLWantReadError, SSLWantWriteError):
                 while data := self._recv(timeout=0):
                     self.__buffer += data
 

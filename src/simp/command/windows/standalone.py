@@ -1,56 +1,66 @@
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
+from ctypes import WinError, windll
+from ctypes.wintypes import DWORD, HANDLE
 from dataclasses import dataclass
-from msvcrt import get_osfhandle
-from os import O_RDWR, close, devnull, open as osopen
-from subprocess import STARTF_USESTDHANDLES, STARTUPINFO, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE, Popen
+from os import set_handle_inheritable
+from subprocess import CREATE_NEW_CONSOLE, STARTF_USESTDHANDLES, STARTUPINFO, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE, Popen
 from typing import Iterator
 from .socketbridge import WinSocket
 from ..base import Executor
 
 
-@contextmanager
-def closefd(fd: int) -> Iterator[None]:
-    try:
-        yield
-    finally:
-        close(fd)
+INVALID_HANDLE_VALUE = -1
+_GetStdHandle = windll.kernel32.GetStdHandle
+_GetStdHandle.argtypes = [DWORD]
+_GetStdHandle.restype = HANDLE
+
+
+def GetStdHandle(nStdHandle: int) -> int:
+    handle = _GetStdHandle(nStdHandle)
+
+    if handle == INVALID_HANDLE_VALUE:
+        raise WinError()
+
+    return handle
 
 
 @dataclass
 class Standalone(Executor[WinSocket]):
     @contextmanager
     def local(self, command: list[str], *, redirect: WinSocket | None = None, interactive: bool = False, tracable: bool = False, wait: bool = False) -> Iterator[int]:
-        with ExitStack() as estack:
-            if interactive:
-                hStdInput = redirect.fileno() if redirect else STD_INPUT_HANDLE
-                hStdOutput = redirect.fileno() if redirect else STD_OUTPUT_HANDLE
-                hStdError = redirect.fileno() if redirect else STD_ERROR_HANDLE
+        creationflags = 0
+
+        if interactive:
+            if redirect:
+                hStdInput = redirect.fileno()
             else:
-                if redirect:
-                    hStdInput = redirect.fileno()
-                else:
-                    fd = osopen(devnull, O_RDWR)
-                    estack.enter_context(closefd(fd))
-                    hStdInput = get_osfhandle(fd)
+                hStdInput = GetStdHandle(STD_INPUT_HANDLE)
+                creationflags |= CREATE_NEW_CONSOLE
+        else:
+            hStdInput = INVALID_HANDLE_VALUE
 
-                hStdOutput = redirect.fileno() if redirect else STD_OUTPUT_HANDLE
-                hStdError = redirect.fileno() if redirect else STD_ERROR_HANDLE
+        hStdOutput = redirect.fileno() if redirect else GetStdHandle(STD_OUTPUT_HANDLE)
+        hStdError = redirect.fileno() if redirect else GetStdHandle(STD_ERROR_HANDLE)
+        handle_list = [hStdInput, hStdOutput, hStdError]
+        handle_list = list(set(h for h in handle_list if h != INVALID_HANDLE_VALUE))
 
-            startupinfo = STARTUPINFO(
-                dwFlags=STARTF_USESTDHANDLES,
-                hStdInput=hStdInput,
-                hStdOutput=hStdOutput,
-                hStdError=hStdError
-            )
+        for handle in handle_list:
+            set_handle_inheritable(handle, True)
 
-            with Popen(command, close_fds=False, startupinfo=startupinfo) as popen:
-                estack.pop_all().close()
+        startupinfo = STARTUPINFO(
+            dwFlags=STARTF_USESTDHANDLES,
+            hStdInput=hStdInput,
+            hStdOutput=hStdOutput,
+            hStdError=hStdError,
+            lpAttributeList=dict(handle_list=handle_list)
+        )
 
-                try:
-                    yield popen.pid
-                finally:
-                    if not wait and popen.poll() is None:
-                        popen.terminate()
+        with Popen(command, startupinfo=startupinfo, creationflags=creationflags) as popen:
+            try:
+                yield popen.pid
+            finally:
+                if not wait and popen.poll() is None:
+                    popen.terminate()
 
     @contextmanager
     def remote(self, command: list[str], *, redirect: WinSocket | None = None, interactive: bool = False, tracable: bool = False, wait: bool = False) -> Iterator[int]:
