@@ -1,4 +1,4 @@
-from ..utility import rol64, ror64
+from simp import rol64, ror64
 
 
 __all__ = [
