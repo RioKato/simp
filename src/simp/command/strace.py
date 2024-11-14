@@ -1,25 +1,23 @@
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
-from typing import Iterator
+from typing import Callable, Iterator
 from .base import Executor, Launcher
 
 __all__ = [
-    'Alias', 'Tracer'
+    'Alias'
 ]
 
 
 @dataclass
 class Alias:
     env: str = 'env'
-    frida: str = 'frida'
-    frida_server: str = 'frida-server'
     setarch: str = 'setarch'
+    strace: str = 'strace'
 
 
 @dataclass
-class Tracer(Launcher[None]):
+class Tracer(Launcher[Callable[[], None]]):
     command: list[str]
-    script: str
     env: dict[str, str] = field(default_factory=dict)
     aslr: bool = True
     options: list[str] = field(default_factory=list)
@@ -37,18 +35,20 @@ class Tracer(Launcher[None]):
             for k, v in self.env.items():
                 command += [f'{k}={v}']
 
-        command += [self.alias.frida_server]
-        return command
-
-    def cli(self) -> list[str]:
-        command = [self.alias.frida, '-R', '-l', self.script]
-        command += self.options
-        command += ['--']
         command += self.command
         return command
 
+    def cli(self, pid: int) -> list[str]:
+        command = [self.alias.strace]
+        command += self.options
+        command += ['-p', f'{pid}']
+        return command
+
     @contextmanager
-    def __call__[Redirect](self, executor: Executor[Redirect], *, redirect: Redirect | None = None) -> Iterator[None]:
-        with executor.remote(self.run(), redirect=redirect, interactive=bool(redirect)):
-            with executor.local(self.cli(), interactive=True):
-                yield
+    def __call__[Redirect](self, executor: Executor[Redirect], *, redirect: Redirect | None = None) -> Iterator[Callable[[], None]]:
+        with executor.local(self.run(), redirect=redirect, interactive=bool(redirect), tracable=True) as pid:
+            with ExitStack() as estack:
+                def attach():
+                    estack.enter_context(executor.local(self.cli(pid), interactive=True))
+
+                yield attach
