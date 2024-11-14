@@ -15,9 +15,9 @@ class Alias:
 @dataclass
 class Tracer(Launcher[None]):
     command: list[str]
+    script: str
     env: dict[str, str] = field(default_factory=dict)
     aslr: bool = True
-    script: str = ''
     alias: Alias = field(default_factory=Alias)
 
     def run(self) -> list[str]:
