@@ -4,7 +4,7 @@ from typing import Iterator
 from .base import Executor, Launcher
 
 __all__ = [
-    'Alias', 'Tracer'
+    'Alias', 'Debugger'
 ]
 
 
@@ -17,7 +17,7 @@ class Alias:
 
 
 @dataclass
-class Tracer(Launcher[None]):
+class Debugger(Launcher[None]):
     command: list[str]
     script: str
     env: dict[str, str] = field(default_factory=dict)

@@ -4,7 +4,7 @@ from typing import Callable, Iterator
 from .base import Executor, Launcher
 
 __all__ = [
-    'Alias', 'Tracer'
+    'Alias', 'Debugger', 'Attacher'
 ]
 
 
@@ -16,7 +16,38 @@ class Alias:
 
 
 @dataclass
-class Tracer(Launcher[Callable[[], None]]):
+class Debugger(Launcher[None]):
+    command: list[str]
+    env: dict[str, str] = field(default_factory=dict)
+    aslr: bool = True
+    options: list[str] = field(default_factory=list)
+    alias: Alias = field(default_factory=Alias)
+
+    def debug(self) -> list[str]:
+        command = []
+
+        if not self.aslr:
+            command += [self.alias.setarch, '-R']
+
+        if self.env:
+            command += [self.alias.env]
+
+            for k, v in self.env.items():
+                command += [f'{k}={v}']
+
+        command += [self.alias.strace]
+        command += self.options
+        command += self.command
+        return command
+
+    @contextmanager
+    def __call__[Redirect](self, executor: Executor[Redirect], *, redirect: Redirect | None = None) -> Iterator[None]:
+        with executor.remote(self.debug(), redirect=redirect, interactive=bool(redirect)):
+            yield
+
+
+@dataclass
+class Attacher(Launcher[Callable[[], None]]):
     command: list[str]
     env: dict[str, str] = field(default_factory=dict)
     aslr: bool = True
