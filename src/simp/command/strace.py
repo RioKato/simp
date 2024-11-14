@@ -4,8 +4,7 @@ from typing import Callable, Iterator
 from .base import Executor, Launcher
 
 __all__ = [
-    'Alias',
-    'Tracer'
+    'Alias', 'Tracer'
 ]
 
 
