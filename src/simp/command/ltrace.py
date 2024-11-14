@@ -46,9 +46,9 @@ class Tracer(Launcher[Callable[[], None]]):
 
     @contextmanager
     def __call__[Redirect](self, executor: Executor[Redirect], *, redirect: Redirect | None = None) -> Iterator[Callable[[], None]]:
-        with executor.local(self.run(), redirect=redirect, interactive=bool(redirect), tracable=True) as pid:
+        with executor.remote(self.run(), redirect=redirect, interactive=bool(redirect), tracable=True) as pid:
             with ExitStack() as estack:
                 def attach():
-                    estack.enter_context(executor.local(self.cli(pid), interactive=True))
+                    estack.enter_context(executor.remote(self.cli(pid), interactive=True))
 
                 yield attach
