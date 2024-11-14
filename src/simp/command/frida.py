@@ -36,7 +36,7 @@ class Tracer(Launcher[None]):
         return command
 
     def cli(self) -> list[str]:
-        command = [self.alias.frida, '-R', '-l', self.script]
+        command = [self.alias.frida, '-R', '-l', self.script, '--']
         command += self.command
         return command
 
