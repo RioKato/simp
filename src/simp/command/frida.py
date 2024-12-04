@@ -84,8 +84,6 @@ class Attacher(Launcher[Callable[[], None]]):
     def cli(self, pid: int) -> list[str]:
         command = [self.alias.frida, '-R', '-l', self.script, '-p', f'{pid}']
         command += self.options
-        command += ['--']
-        command += self.command
         return command
 
     @contextmanager
